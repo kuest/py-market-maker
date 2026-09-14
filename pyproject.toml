@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "py-market-maker"
-version = "0.1.0"
+version = "0.1.1"
 description = "Simple Python market maker example for Kuest based prediction markets"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -163,7 +163,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--deposit-wallet",
         default=_env_optional_str("KUEST_DEPOSIT_WALLET"),
     )
-    parser.add_argument("--chain-id", type=int, default=_env_optional_int("KUEST_CHAIN_ID"))
+    parser.add_argument("--chain-id", type=int, default=_env_optional_int("CHAIN_ID"))
     parser.add_argument(
         "--discovery",
         choices=[mode.value for mode in DiscoveryMode],
@@ -469,7 +469,7 @@ def validate_config(config: Config, parser: argparse.ArgumentParser) -> None:
         if not config.deposit_wallet:
             parser.error("--live requires KUEST_DEPOSIT_WALLET or --deposit-wallet")
         if config.chain_id is None:
-            parser.error("--live requires KUEST_CHAIN_ID or --chain-id; use 137 for Polygon or 80002 for Amoy")
+            parser.error("--live requires CHAIN_ID or --chain-id; use 137 for Polygon Mainnet")
         if config.chain_id not in (POLYGON, AMOY):
             parser.error(f"unsupported chain id {config.chain_id}; SDK supports {POLYGON} and {AMOY}")
 
