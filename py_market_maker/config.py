@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Sequence
 
 POLYGON = 137
-AMOY = 80002
 
 
 class DiscoveryMode(str, Enum):
@@ -82,6 +81,11 @@ class Config:
     fill_max_records: int
     position_reconcile_tolerance: Decimal
     event_slug: str | None = None
+    clob_ws_host: str = "wss://ws-subscriptions-clob.kuest.com"
+    relayer_host: str = "https://relayer.kuest.com"
+    gamma_host: str = "https://gamma-api.kuest.com"
+    data_host: str = "https://data-api.kuest.com"
+    rpc_url: str = "https://polygon.drpc.org"
 
 
 def parse_args(argv: Sequence[str] | None = None) -> Config:
@@ -96,6 +100,11 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         chain_id=args.chain_id,
         discovery=DiscoveryMode(args.discovery),
         event_slug=args.event_slug,
+        clob_ws_host=args.clob_ws_host,
+        relayer_host=args.relayer_host,
+        gamma_host=args.gamma_host,
+        data_host=args.data_host,
+        rpc_url=args.rpc_url,
         max_markets=args.max_markets,
         max_pages=args.max_pages,
         order_size=args.order_size,
@@ -153,6 +162,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--clob-host",
         default=_env_str("KUEST_CLOB_HOST", "https://clob.kuest.com"),
     )
+    parser.add_argument("--clob-ws-host", default=_env_str("KUEST_CLOB_WS_HOST", "wss://ws-subscriptions-clob.kuest.com"))
+    parser.add_argument("--relayer-host", default=_env_str("KUEST_RELAYER_HOST", "https://relayer.kuest.com"))
+    parser.add_argument("--gamma-host", default=_env_str("KUEST_GAMMA_HOST", "https://gamma-api.kuest.com"))
+    parser.add_argument("--data-host", default=_env_str("KUEST_DATA_HOST", "https://data-api.kuest.com"))
+    parser.add_argument("--rpc-url", default=_env_str("KUEST_RPC_URL", "https://polygon.drpc.org"))
     parser.add_argument(
         "--live",
         action=argparse.BooleanOptionalAction,
@@ -463,6 +477,8 @@ def validate_config(config: Config, parser: argparse.ArgumentParser) -> None:
         parser.error("MARKET_MAKER_PAUSE_ON_RISK_BREACH requires --live")
     if config.max_data_age_secs <= 0:
         parser.error("MARKET_MAKER_MAX_DATA_AGE_SECS must be greater than zero")
+    if config.chain_id is not None and config.chain_id != POLYGON:
+        parser.error("the unified SDK environment currently supports only Polygon Mainnet (137)")
     if config.live:
         if not config.private_key:
             parser.error("--live requires KUEST_PRIVATE_KEY or --private-key")
@@ -470,8 +486,6 @@ def validate_config(config: Config, parser: argparse.ArgumentParser) -> None:
             parser.error("--live requires KUEST_DEPOSIT_WALLET or --deposit-wallet")
         if config.chain_id is None:
             parser.error("--live requires CHAIN_ID or --chain-id; use 137 for Polygon Mainnet")
-        if config.chain_id not in (POLYGON, AMOY):
-            parser.error(f"unsupported chain id {config.chain_id}; SDK supports {POLYGON} and {AMOY}")
 
 
 def band_margin_ticks(config: Config) -> tuple[int, int, int]:

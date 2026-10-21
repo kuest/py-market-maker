@@ -1,6 +1,5 @@
 <h1 align="center">
-  <img src="https://github.com/user-attachments/assets/0cc687fb-89c4-43fa-a056-d89c307215ad" alt="Kuest" height="96" /><br/>
-  Kuest Python Market Maker Example
+  Python Market Maker Example
 </h1>
 
 ## What It Does
@@ -23,19 +22,14 @@ maximum, and only tops up when open size falls below the band minimum.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e vendor/py-clob-client
 python -m pip install -e ".[dev]"
 ```
 
-The customized Python CLOB SDK must be vendored at `vendor/py-clob-client`.
-Move the whole SDK project root there, not only the `py_clob_client/` package
-folder. The directory should look like this:
+For an operator ZIP with `vendor/py-sdk`, install that SDK first:
 
-```text
-vendor/py-clob-client/
-  py_clob_client/
-  setup.py
-  .sdk/
+```bash
+python -m pip install -e vendor/py-sdk
+python -m pip install -e ".[dev]"
 ```
 
 ## Dry Run
@@ -56,7 +50,7 @@ To trade only one event, pass the event slug:
 python -m py_market_maker --event-slug nba-finals-2026
 ```
 
-Event mode reads `.sdk/site-config.json`, uses the configured Kuest site API,
+Event mode reads `.sdk/site-config.json`, uses the configured site API,
 and fetches only the CLOB markets listed under that event. It does not update
 `state/seen-markets.json`.
 
@@ -131,8 +125,7 @@ emergency cancel target.
 
   --clob-host / KUEST_CLOB_HOST
   Default: https://clob.kuest.com
-  The CLOB API endpoint. Necessary because market discovery, order books,
-  auth, signing metadata, and order posting all go through the CLOB API.
+  The CLOB API endpoint for order books, auth, signing metadata and orders.
   Keep configurable for prod/staging/forks.
 
   --live / MARKET_MAKER_LIVE
@@ -148,7 +141,7 @@ emergency cancel target.
   --deposit-wallet / KUEST_DEPOSIT_WALLET
   Required only with --live.
   The deposit wallet/funder address whose balances are used. Necessary
-  because Kuest’s order flow uses deposit-wallet signature type, and the
+  because deposit-wallet signing uses that wallet's balances, and the
   exchange checks this wallet’s USDC/outcome-token balances.
 
   --chain-id / CHAIN_ID
@@ -166,7 +159,7 @@ emergency cancel target.
   --event-slug / MARKET_MAKER_EVENT_SLUG
   Optional.
   If set, the bot ignores normal discovery and keeps trading only the markets
-  under this event slug. It resolves markets from the Kuest fork configured in
+  under this event slug. It resolves markets from the site configured in
   .sdk/site-config.json.
 
   --max-markets / MARKET_MAKER_MAX_MARKETS

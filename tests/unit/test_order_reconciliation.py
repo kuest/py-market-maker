@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from py_clob_client.clob_types import OrderBookSummary, OrderSummary
+from py_market_maker.sdk_adapter import OrderBookSummary, OrderSummary
 
 from py_market_maker import bot
 from py_market_maker.bot import (

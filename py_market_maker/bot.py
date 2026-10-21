@@ -9,19 +9,20 @@ from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Any, Callable
 
-from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import (
+from .sdk_adapter import (
     AssetType,
     BalanceAllowanceParams,
+    BUY,
+    ClobClient,
+    END_CURSOR,
+    INITIAL_CURSOR,
     OpenOrderParams,
     OrderArgs,
     OrderBookSummary,
     OrderSummary,
-    OrderType,
+    SELL,
     TradeParams,
 )
-from py_clob_client.constants import END_CURSOR
-from py_clob_client.order_builder.constants import BUY, SELL
 
 from .config import Config, DiscoveryMode, band_margin_ticks, band_sizes
 from .event_scope import condition_id_from_market, condition_ids_from_site_config
@@ -29,7 +30,6 @@ from .market_loss import MarketExposure, OutcomeExposure, ProposedOrder
 from .pricing import ceil_to_tick, fair_price, floor_to_tick, is_tradeable_price
 from .state import FillLedger, FillRecord, PauseState, SeenMarkets
 
-INITIAL_CURSOR = "MA=="
 CONDITIONAL_TOKEN_BASE_UNITS = Decimal("1000000")
 CANCEL_ORDER_BATCH_SIZE = 50
 CANCEL_VERIFY_ATTEMPTS = 5
@@ -510,7 +510,7 @@ def run(config: Config) -> None:
             print(f"no pause file at {config.pause_path}")
         return
 
-    public_client = ClobClient(config.clob_host)
+    public_client = ClobClient.public(config)
     live_client = authenticate(config) if config.live else None
 
     if config.cancel_all:
@@ -648,15 +648,7 @@ def replace_managed_scope(managed_scope: list[dict[str, Any]], candidates: list[
 
 
 def authenticate(config: Config) -> ClobClient:
-    client = ClobClient(
-        config.clob_host,
-        chain_id=config.chain_id,
-        key=config.private_key,
-        signature_type=3,
-        funder=config.deposit_wallet,
-    )
-    client.set_api_creds(client.create_or_derive_api_creds())
-    return client
+    return ClobClient.authenticated(config)
 
 
 def discover_markets(client: ClobClient, mode: DiscoveryMode, max_pages: int) -> list[dict[str, Any]]:
@@ -1320,9 +1312,10 @@ def post_quote_plan(
         order = client.create_order(
             OrderArgs(
                 token_id=plan.token_id,
-                price=float(band.price),
-                size=float(missing_size),
+                price=band.price,
+                size=missing_size,
                 side=band.side,
+                post_only=config.post_only,
             )
         )
         planned_orders.append(
@@ -1345,7 +1338,7 @@ def post_quote_plan(
         return
 
     responses = [
-        (planned_order, client.post_order(planned_order.order, orderType=OrderType.GTC, post_only=config.post_only))
+        (planned_order, client.post_order(planned_order.order))
         for planned_order in planned_orders
     ]
     print_post_responses(plan, responses)
