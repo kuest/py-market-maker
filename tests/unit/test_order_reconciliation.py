@@ -976,6 +976,7 @@ class FakeClient:
         return {"canceled": list(order_ids), "not_canceled": []}
 
     def get_orders(self, params):
+        assert params.market in {"market", "market-a", "market-b"}
         self.get_order_filters.append((params.asset_id, params.market))
         self.get_order_tokens.append(params.asset_id)
         pages = self.open_order_pages.get(params.asset_id, [])
