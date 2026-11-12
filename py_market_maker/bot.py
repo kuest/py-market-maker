@@ -54,6 +54,7 @@ class CancelOpenOrdersSummary:
 
 @dataclass(frozen=True)
 class QuotePlan:
+    condition_id: str
     market_key: str
     market_slug: str
     question: str
@@ -100,6 +101,7 @@ class QuoteBand:
 
 @dataclass(frozen=True)
 class TokenQuote:
+    condition_id: str
     token_id: str
     outcome: str
     fair_price: Decimal
@@ -301,7 +303,7 @@ class LiveMarketState:
                 else None
             )
             cost_basis = token_cost_basis(fill_records, balance, token_quote.fair_price)
-            open_orders = open_orders_for_token(client, token_quote.token_id)
+            open_orders = open_orders_for_token(client, token_quote.token_id, token_quote.condition_id)
             open_orders_fetched_at = time.monotonic()
             tokens.append(
                 LiveTokenState(
@@ -753,6 +755,13 @@ def has_rewards(market: dict[str, Any]) -> bool:
     return (isinstance(rates, list) and bool(rates)) or min_size > Decimal("0")
 
 
+def required_condition_id(market: dict[str, Any]) -> str:
+    condition_id = condition_id_from_market(market)
+    if not condition_id:
+        raise ValueError("Market is missing its condition ID")
+    return condition_id
+
+
 def market_key(market: dict[str, Any]) -> str:
     condition_id = condition_id_from_market(market)
     if condition_id:
@@ -961,6 +970,7 @@ def build_token_quote(
             liquidity_skip = f"liquidity quality check failed: {reject_reason.message()}"
     plan = None if liquidity_skip else build_quote_plan(market, token, book, book_fetched_at, quote_inputs, config)
     return TokenQuote(
+        condition_id=required_condition_id(market),
         token_id=_token_id(token),
         outcome=_token_outcome(token),
         fair_price=quote_inputs.fair_price,
@@ -1010,6 +1020,7 @@ def build_quote_plan(
         return None
 
     return QuotePlan(
+        condition_id=required_condition_id(market),
         market_key=market_key(market),
         market_slug=_market_slug(market),
         question=_market_question(market),
@@ -1211,7 +1222,7 @@ def post_quote_plan(
             return
         if order_ids:
             canceled_ids = {open_order_id(order) for order in orders_to_cancel if open_order_id(order)}
-            open_orders = open_orders_for_token(client, plan.token_id)
+            open_orders = open_orders_for_token(client, plan.token_id, plan.condition_id)
             market_state.replace_open_orders(plan.token_id, open_orders)
             if any(open_order_id(order) in canceled_ids for order in open_orders):
                 print(f"skip placing {plan.market_slug} {plan.outcome}: canceled order state is still unstable")
@@ -1559,7 +1570,7 @@ def cancel_risk_increasing_orders(
         f"risk breach cancel {plan.market_slug} {plan.outcome}: "
         f"canceled={len(canceled)} not_canceled={len(not_canceled)}"
     )
-    return open_orders_for_token(client, plan.token_id)
+    return open_orders_for_token(client, plan.token_id, plan.condition_id)
 
 
 def cancel_risk_increasing_market_orders(
@@ -1637,8 +1648,8 @@ def market_loss_exceeds_cap(
     return True
 
 
-def open_orders_for_token(client: ClobClient, token_id: str) -> list[Any]:
-    orders = client.get_orders(OpenOrderParams(asset_id=token_id))
+def open_orders_for_token(client: ClobClient, token_id: str, condition_id: str) -> list[Any]:
+    orders = client.get_orders(OpenOrderParams(asset_id=token_id, market=condition_id))
     return orders if isinstance(orders, list) else []
 
 
@@ -1675,14 +1686,18 @@ def cancel_open_orders_for_markets(
     client: ClobClient,
     markets: list[dict[str, Any]],
 ) -> CancelOpenOrdersSummary:
-    token_ids = managed_token_ids(markets)
+    token_markets: dict[str, str] = {}
+    for market in markets:
+        for token_id in managed_token_ids([market]):
+            token_markets.setdefault(token_id, required_condition_id(market))
+    token_ids = list(token_markets)
     summary = CancelOpenOrdersSummary(
         markets_checked=len(markets),
         tokens_checked=len(token_ids),
     )
 
-    for token_id in token_ids:
-        open_orders = open_orders_for_token(client, token_id)
+    for token_id, condition_id in token_markets.items():
+        open_orders = open_orders_for_token(client, token_id, condition_id)
         if not open_orders:
             continue
 
@@ -1702,7 +1717,7 @@ def cancel_open_orders_for_markets(
 
     if summary.orders_found > 0:
         for attempt in range(1, CANCEL_VERIFY_ATTEMPTS + 1):
-            summary.remaining_open = remaining_open_orders_for_tokens(client, token_ids)
+            summary.remaining_open = remaining_open_orders_for_tokens(client, token_markets)
             if summary.remaining_open == 0:
                 break
             if attempt < CANCEL_VERIFY_ATTEMPTS:
@@ -1727,8 +1742,11 @@ def managed_token_ids(markets: list[dict[str, Any]]) -> list[str]:
     return token_ids
 
 
-def remaining_open_orders_for_tokens(client: ClobClient, token_ids: list[str]) -> int:
-    return sum(len(open_orders_for_token(client, token_id)) for token_id in token_ids)
+def remaining_open_orders_for_tokens(client: ClobClient, token_markets: dict[str, str]) -> int:
+    return sum(
+        len(open_orders_for_token(client, token_id, condition_id))
+        for token_id, condition_id in token_markets.items()
+    )
 
 
 def print_cancel_summary(summary: CancelOpenOrdersSummary) -> None:
@@ -1994,7 +2012,7 @@ def apply_post_responses(
         )
 
     if has_failed_response:
-        refreshed_orders = open_orders_for_token(client, plan.token_id)
+        refreshed_orders = open_orders_for_token(client, plan.token_id, plan.condition_id)
         market_state.remove_pending_orders_now_open(refreshed_orders)
         market_state.replace_open_orders(plan.token_id, refreshed_orders)
         print(f"post state refreshed for {plan.market_slug} {plan.outcome} after rejected order response")

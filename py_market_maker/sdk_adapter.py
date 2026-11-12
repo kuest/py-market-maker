@@ -62,6 +62,7 @@ class BalanceAllowanceParams:
 @dataclass(frozen=True)
 class OpenOrderParams:
     asset_id: str
+    market: str
 
 
 @dataclass(frozen=True)
@@ -215,7 +216,7 @@ class ClobClient:
         return self.sdk.get_order_book(token_id=token_id)
 
     def get_orders(self, params: OpenOrderParams) -> list[Any]:
-        return list(self._secure().list_open_orders(asset_id=params.asset_id).iter_items())
+        return list(self._secure().list_open_orders(asset_id=params.asset_id, market=params.market).iter_items())
 
     def get_trades(self, params: TradeParams, *, next_cursor: str | None) -> dict[str, Any]:
         paginator = self._secure().list_account_trades(

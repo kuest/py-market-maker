@@ -216,6 +216,7 @@ def test_preflight_stale_data_reason_flags_stale_token_inputs():
     now = 100.0
     token_quotes = [
         TokenQuote(
+            condition_id="market",
             token_id="yes",
             outcome="Yes",
             fair_price=Decimal("0.50"),
@@ -328,6 +329,7 @@ def test_exposure_uses_token_cost_basis_for_existing_balances():
 def test_live_market_state_fetches_fills_and_uses_cost_basis(tmp_path):
     token_quotes = [
         TokenQuote(
+            condition_id="market",
             token_id="yes",
             outcome="Yes",
             fair_price=Decimal("0.50"),
@@ -371,6 +373,7 @@ def test_live_market_state_fetches_fills_and_uses_cost_basis(tmp_path):
 def test_live_market_state_records_position_reconcile_error(tmp_path):
     token_quotes = [
         TokenQuote(
+            condition_id="market",
             token_id="yes",
             outcome="Yes",
             fair_price=Decimal("0.50"),
@@ -885,6 +888,7 @@ def test_quote_market_reuses_preflight_snapshot_before_pre_post_refresh():
         market_key="market",
         token_quotes=[
             TokenQuote(
+                condition_id="market",
                 token_id="yes",
                 outcome="Yes",
                 fair_price=Decimal("0.50"),
@@ -956,6 +960,7 @@ class FakeClient:
         return {"canceled": list(order_ids), "not_canceled": []}
 
     def get_orders(self, params):
+        assert params.market in {"market", "market-a", "market-b"}
         self.get_order_tokens.append(params.asset_id)
         pages = self.open_order_pages.get(params.asset_id, [])
         return list(pages.pop(0)) if pages else []
@@ -1005,6 +1010,7 @@ def _market_state(
 def _plan(buy_band=None, sell_band=None, book_fetched_at=None):
     book_fetched_at = bot.time.monotonic() if book_fetched_at is None else book_fetched_at
     return QuotePlan(
+        condition_id="market",
         market_key="market",
         market_slug="market",
         question="Question?",
@@ -1081,6 +1087,7 @@ def _post_response(success, order_id):
 def _market(slug="market"):
     return {
         "slug": slug,
+        "condition_id": slug,
         "question": "Question?",
         "enable_order_book": True,
         "active": True,
