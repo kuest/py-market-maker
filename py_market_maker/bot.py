@@ -856,7 +856,7 @@ def preflight_risk_audit(
         try:
             token_quotes = build_market_token_quotes(public_client, market, config)
         except Exception as error:
-            print(f"preflight risk audit skip {_market_slug(market)}: failed to fetch order books ({error})")
+            print(f"preflight risk audit skip {_market_slug(market)}: failed to build market quotes ({error})")
             return PreflightRiskAudit(PreflightRiskAuditResult.SKIP_CYCLE, snapshots, global_budget)
 
         try:

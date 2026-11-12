@@ -804,6 +804,20 @@ def test_preflight_risk_audit_skips_cycle_on_breach_without_pause():
     assert client.cancel_batches == []
 
 
+def test_preflight_missing_condition_reports_quote_failure_and_skips_cycle(capsys):
+    market = _market()
+    del market["condition_id"]
+    client = FakeClient(books={"yes": _book()})
+    result = preflight_risk_audit(client, client, [market], parse_args([]))
+    assert result.result == PreflightRiskAuditResult.SKIP_CYCLE
+    assert client.get_order_filters == []
+    assert client.cancel_batches == []
+    assert client.posted_orders == []
+    output = capsys.readouterr().out
+    assert "failed to build market quotes (Market is missing its condition ID)" in output
+    assert "failed to fetch order books" not in output
+
+
 def test_preflight_risk_audit_returns_market_snapshots():
     client = FakeClient(
         books={"yes": _book()},
@@ -865,6 +879,7 @@ def test_preflight_risk_audit_stops_when_total_open_buy_collateral_breaches(tmp_
     )
 
     assert result.result == PreflightRiskAuditResult.STOP
+    assert client.get_order_filters[:2] == [("yes", "market-a"), ("yes", "market-b")]
 
 
 def test_preflight_snapshot_rejects_market_key_mismatch():
@@ -937,6 +952,7 @@ class FakeClient:
         self.created_orders = []
         self.posted_orders = []
         self.get_order_tokens = []
+        self.get_order_filters = []
         self.get_book_tokens = []
         self.get_trade_tokens = []
 
@@ -960,7 +976,7 @@ class FakeClient:
         return {"canceled": list(order_ids), "not_canceled": []}
 
     def get_orders(self, params):
-        assert params.market in {"market", "market-a", "market-b"}
+        self.get_order_filters.append((params.asset_id, params.market))
         self.get_order_tokens.append(params.asset_id)
         pages = self.open_order_pages.get(params.asset_id, [])
         return list(pages.pop(0)) if pages else []
