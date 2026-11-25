@@ -43,6 +43,7 @@ def test_cancel_open_orders_for_markets_batches_and_verifies():
     assert summary.canceled == order_count
     assert summary.not_canceled == 0
     assert summary.remaining_open == 0
+    assert client.order_filters == [("yes", "market"), ("no", "market")] * 2
     assert client.cancel_batches == [
         [f"yes-{index}" for index in range(CANCEL_ORDER_BATCH_SIZE)],
         [f"yes-{CANCEL_ORDER_BATCH_SIZE}"],
@@ -156,8 +157,10 @@ class FakeClient:
             for token_id, orders in orders_by_token.items()
         }
         self.cancel_batches = []
+        self.order_filters = []
 
     def get_orders(self, params):
+        self.order_filters.append((params.asset_id, params.market))
         return list(self.orders_by_token.get(params.asset_id, []))
 
     def cancel_orders(self, order_ids):
@@ -178,6 +181,7 @@ class FakeClient:
 def _market(slug, token_ids):
     return {
         "slug": slug,
+        "condition_id": slug,
         "enable_order_book": True,
         "active": True,
         "closed": False,
@@ -189,3 +193,10 @@ def _market(slug, token_ids):
 
 def _order(order_id):
     return {"id": order_id}
+
+
+def test_cancel_rejects_missing_condition_id_before_api_calls():
+    market = _market("slug", ["yes"])
+    del market["condition_id"]
+    with pytest.raises(ValueError, match="Market is missing its condition ID"):
+        cancel_open_orders_for_markets(object(), [market])

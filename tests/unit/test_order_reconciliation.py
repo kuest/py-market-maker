@@ -216,6 +216,7 @@ def test_preflight_stale_data_reason_flags_stale_token_inputs():
     now = 100.0
     token_quotes = [
         TokenQuote(
+            condition_id="market",
             token_id="yes",
             outcome="Yes",
             fair_price=Decimal("0.50"),
@@ -328,6 +329,7 @@ def test_exposure_uses_token_cost_basis_for_existing_balances():
 def test_live_market_state_fetches_fills_and_uses_cost_basis(tmp_path):
     token_quotes = [
         TokenQuote(
+            condition_id="market",
             token_id="yes",
             outcome="Yes",
             fair_price=Decimal("0.50"),
@@ -371,6 +373,7 @@ def test_live_market_state_fetches_fills_and_uses_cost_basis(tmp_path):
 def test_live_market_state_records_position_reconcile_error(tmp_path):
     token_quotes = [
         TokenQuote(
+            condition_id="market",
             token_id="yes",
             outcome="Yes",
             fair_price=Decimal("0.50"),
@@ -801,6 +804,20 @@ def test_preflight_risk_audit_skips_cycle_on_breach_without_pause():
     assert client.cancel_batches == []
 
 
+def test_preflight_missing_condition_reports_quote_failure_and_skips_cycle(capsys):
+    market = _market()
+    del market["condition_id"]
+    client = FakeClient(books={"yes": _book()})
+    result = preflight_risk_audit(client, client, [market], parse_args([]))
+    assert result.result == PreflightRiskAuditResult.SKIP_CYCLE
+    assert client.get_order_filters == []
+    assert client.cancel_batches == []
+    assert client.posted_orders == []
+    output = capsys.readouterr().out
+    assert "failed to build market quotes (Market is missing its condition ID)" in output
+    assert "failed to fetch order books" not in output
+
+
 def test_preflight_risk_audit_returns_market_snapshots():
     client = FakeClient(
         books={"yes": _book()},
@@ -862,6 +879,7 @@ def test_preflight_risk_audit_stops_when_total_open_buy_collateral_breaches(tmp_
     )
 
     assert result.result == PreflightRiskAuditResult.STOP
+    assert client.get_order_filters[:2] == [("yes", "market-a"), ("yes", "market-b")]
 
 
 def test_preflight_snapshot_rejects_market_key_mismatch():
@@ -885,6 +903,7 @@ def test_quote_market_reuses_preflight_snapshot_before_pre_post_refresh():
         market_key="market",
         token_quotes=[
             TokenQuote(
+                condition_id="market",
                 token_id="yes",
                 outcome="Yes",
                 fair_price=Decimal("0.50"),
@@ -933,6 +952,7 @@ class FakeClient:
         self.created_orders = []
         self.posted_orders = []
         self.get_order_tokens = []
+        self.get_order_filters = []
         self.get_book_tokens = []
         self.get_trade_tokens = []
 
@@ -956,6 +976,8 @@ class FakeClient:
         return {"canceled": list(order_ids), "not_canceled": []}
 
     def get_orders(self, params):
+        assert params.market in {"market", "market-a", "market-b"}
+        self.get_order_filters.append((params.asset_id, params.market))
         self.get_order_tokens.append(params.asset_id)
         pages = self.open_order_pages.get(params.asset_id, [])
         return list(pages.pop(0)) if pages else []
@@ -1005,6 +1027,7 @@ def _market_state(
 def _plan(buy_band=None, sell_band=None, book_fetched_at=None):
     book_fetched_at = bot.time.monotonic() if book_fetched_at is None else book_fetched_at
     return QuotePlan(
+        condition_id="market",
         market_key="market",
         market_slug="market",
         question="Question?",
@@ -1081,6 +1104,7 @@ def _post_response(success, order_id):
 def _market(slug="market"):
     return {
         "slug": slug,
+        "condition_id": slug,
         "question": "Question?",
         "enable_order_book": True,
         "active": True,

@@ -182,3 +182,19 @@ def test_post_cancel_and_balance_follow_unified_result_contract(monkeypatch):
         ("cancel", ["order-1", "order-2"]),
         ("balance", {"asset_type": "CONDITIONAL", "token_id": "123"}),
     ]
+
+
+def test_get_orders_forwards_asset_and_market_and_collects_pages(monkeypatch):
+    calls = []
+    orders = [SimpleNamespace(id="order-1"), SimpleNamespace(id="order-2")]
+
+    class FakeSecure:
+        def list_open_orders(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(iter_items=lambda: iter(orders))
+
+    monkeypatch.setattr(sdk_adapter, "SecureClient", FakeSecure)
+    client = sdk_adapter.ClobClient(FakeSecure())
+    result = client.get_orders(sdk_adapter.OpenOrderParams(asset_id="123", market="condition-1"))
+    assert result == orders
+    assert calls == [{"asset_id": "123", "market": "condition-1"}]

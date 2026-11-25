@@ -95,6 +95,7 @@ def _plan(buy_band, sell_band=None):
     from py_market_maker.bot import QuotePlan
 
     return QuotePlan(
+        condition_id="market",
         market_key="market",
         market_slug="market",
         question="Question?",
